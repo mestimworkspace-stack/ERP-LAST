@@ -314,7 +314,7 @@
     // ==========================================
     // ВАШИЯТ GOOGLE WEB APP URL СЕ ЗАПИСВА ТУК ЕДНОКРАТНО:
     // ==========================================
-    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzyT0aHEjFB86a8iey_aOjeKPaAUpNnN3tkEHAb3yZZxj2PrNivTfT_LO0blOdXOuFejQ/exec";
+    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxwLp0Mcd_lOay8GorDgVeKHCpvmQLZylXrDDwTZ2Vpf0BQZyf0QNQT9c69Vyc9-Wgo2A/exec";
 
     let calendar = null;
     let dbClients = [];
@@ -335,15 +335,20 @@
     });
 
     // ОПТИМИЗИРАНА И БЕЗОПАСНА ЗАЯВКА КЪМ GOOGLE С REDIRECT
+    // ОПТИМИЗИРАНА И БЕЗОПАСНА ЗАЯВКА - МАСКИРАНА КАТО УЕБ ФОРМА
     async function apiRequest(action, payload = {}) {
       const token = localStorage.getItem('erp_token');
       const body = { action, payload, token };
       
       try {
+        // Обличаме JSON данните като стандартна FormData за заобикаляне на CORS защитите
+        const formData = new URLSearchParams();
+        formData.append('payload', JSON.stringify(body));
+
         const response = await fetch(GOOGLE_WEB_APP_URL, {
           method: 'POST',
-          body: JSON.stringify(body),
-          redirect: 'follow' // <<-- ИЗКЛЮЧИТЕЛНО ВАЖНО ЗА GOOGLE И CORS!
+          body: formData, // Изпраща се като форма (application/x-www-form-urlencoded)
+          redirect: 'follow'
         });
         const result = await response.json();
         if (result.success === false) {
