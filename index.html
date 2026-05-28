@@ -380,7 +380,8 @@
         const response = await fetch(API_URL, {
           method: 'POST',
           body: JSON.stringify(body),
-          headers: { 'Content-Type': 'text/plain' } // За заобикаляне на preflight CORS
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Добавен charset
+          redirect: 'follow' // ИЗКЛЮЧИТЕЛНО ВАЖНО: Казва на браузъра да следва пренасочванията на Google
         });
         const result = await response.json();
         if (result.success === false) {
