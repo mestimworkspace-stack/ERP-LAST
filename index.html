@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ERP Административен Панел</title>
+  
+  <!-- CSS Библиотеки за бързо зареждане -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <style>
+    /* Премахване на скрола при модали */
+    .modal-open { overflow: hidden; }
+    /* Стилизиране на календара за по-добър контраст */
+    .fc-event { cursor: pointer; transition: transform 0.1s; }
+    .fc-event:hover { transform: scale(1.02); }
+    .autocomplete-items {
+      position: absolute; border: 1px solid #d4d4d4; border-bottom: none;
+      border-top: none; z-index: 99; top: 100%; left: 0; right: 0;
+      max-height: 200px; overflow-y: auto;
+    }
+    .autocomplete-items div {
+      padding: 10px; cursor: pointer; background-color: #fff; border-bottom: 1px solid #d4d4d4;
+    }
+    .autocomplete-items div:hover { background-color: #e9e9e9; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+  <!-- ========================================== -->
+  <!-- ЕКРАН ЗА ВХОД (LOGIN) -->
+  <!-- ========================================== -->
+  <div id="login-screen" class="min-height-screen flex items-center justify-center h-screen bg-gray-900">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800"><i class="fa-solid fa-lock text-indigo-600 mr-2"></i>Вход в ERP</h2>
+      
+      <!-- Поле за Web App URL (само за първоначална настройка) -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Google Web App URL</label>
+        <input type="text" id="setup-api-url" placeholder="https://script.google.com/.../exec" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+        <p class="text-xs text-gray-500 mt-1">Попълва се само първия път за връзка с таблицата.</p>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Имейл</label>
+        <input type="email" id="login-email" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Парола</label>
+        <input type="password" id="login-password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <button onclick="attemptLogin()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 font-semibold transition">Вход</button>
+      <p id="login-error" class="text-red-500 text-sm mt-4 text-center hidden"></p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- ОСНОВЕН ИНТЕРФЕЙС (СЛЕД ВХОД) -->
+  <!-- ========================================== -->
+  <div id="main-interface" class="hidden flex flex-col md:flex-row min-h-screen">
+    
+    <!-- Навигация (Странична лента) -->
+    <aside class="w-full md:w-64 bg-slate-800 text-white flex flex-col shadow-lg">
+      <div class="p-5 border-b border-slate-700 flex justify-between items-center">
+        <span class="text-xl font-bold text-indigo-400"><i class="fa-solid fa-chart-line mr-2"></i>ERP Админ</span>
+        <button onclick="logout()" class="md:hidden text-gray-300 hover:text-white"><i class="fa-solid fa-sign-out-alt"></i></button>
+      </div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="#" onclick="showTab('calendar')" id="tab-link-calendar" class="block py-2.5 px-4 rounded transition bg-slate-700 text-white"><i class="fa-solid fa-calendar-days mr-3"></i>Календар</a>
+        <a href="#" onclick="showTab('clients')" id="tab-link-clients" class="block py-2.5 px-4 rounded transition text-gray-300 hover:bg-slate-700 hover:text-white"><i class="fa-solid fa-users mr-3"></i>Клиенти</a>
+        <a href="#" onclick="showTab('team')" id="tab-link-team" class="block py-2.5 px-4 rounded transition text-gray-300 hover:bg-slate-700 hover:text-white"><i class="fa-solid fa-user-tie mr-3"></i>Екип</a>
+      </nav>
+      <div class="p-4 border-t border-slate-700">
+        <div class="text-sm text-gray-400 mb-2">Влезли сте като: <span id="admin-name" class="text-white font-semibold">Админ</span></div>
+        <button onclick="logout()" class="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2 rounded transition"><i class="fa-solid fa-sign-out-alt mr-2"></i>Изход</button>
+      </div>
+    </aside>
+
+    <!-- Основно съдържание -->
+    <main class="flex-1 p-6 md:p-8 bg-gray-50 overflow-x-hidden">
+      
+      <!-- ==================== ТАБ: КАЛЕНДАР ==================== -->
+      <section id="tab-calendar" class="space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+          <h1 class="text-3xl font-extrabold text-slate-800">Календар на поръчките</h1>
+          <button onclick="openOrderModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold transition shadow-md"><i class="fa-solid fa-plus mr-2"></i>Нова поръчка</button>
+        </div>
+        
+        <!-- Бърз Филтър за календара по Клиент/Телефон -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center gap-3">
+          <i class="fa-solid fa-search text-gray-400"></i>
+          <input type="text" id="order-search" oninput="filterCalendarEvents()" placeholder="Бързо филтриране по име на клиент или телефон в календара..." class="w-full focus:outline-none text-sm">
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <div id="calendar"></div>
+        </div>
+      </section>
+
+      <!-- ==================== ТАБ: КЛИЕНТИ ==================== -->
+      <section id="tab-clients" class="hidden space-y-6">
+        <div class="flex justify-between items-center">
+          <h1 class="text-3xl font-extrabold text-slate-800">Управление на Клиенти</h1>
+          <button onclick="openClientModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold transition"><i class="fa-solid fa-user-plus mr-2"></i>Добави Клиент</button>
+        </div>
+
+        <!-- Търсене в реално време -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center gap-3">
+          <i class="fa-solid fa-search text-gray-400"></i>
+          <input type="text" id="client-search" oninput="renderClientsTable()" placeholder="Търсене на клиент по име или телефон..." class="w-full focus:outline-none text-sm">
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-x-auto border">
+          <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+            <thead class="bg-gray-50 text-gray-500 uppercase font-semibold">
+              <tr>
+                <th class="px-6 py-3">Име</th>
+                <th class="px-6 py-3">Телефон</th>
+                <th class="px-6 py-3">Адрес</th>
+                <th class="px-6 py-3">Бележки</th>
+                <th class="px-6 py-3 text-right">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="clients-table-body" class="divide-y divide-gray-200">
+              <!-- Динамично зареждане -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== ТАБ: ЕКИП ==================== -->
+      <section id="tab-team" class="hidden space-y-6">
+        <div class="flex justify-between items-center">
+          <h1 class="text-3xl font-extrabold text-slate-800">Екип и Служители</h1>
+          <button onclick="openTeamModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold transition"><i class="fa-solid fa-user-shield mr-2"></i>Нов Служител</button>
+        </div>
+
+        <!-- Търсене в реално време -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center gap-3">
+          <i class="fa-solid fa-search text-gray-400"></i>
+          <input type="text" id="team-search" oninput="renderTeamTable()" placeholder="Търсене на служител по име или имейл..." class="w-full focus:outline-none text-sm">
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-x-auto border">
+          <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+            <thead class="bg-gray-50 text-gray-500 uppercase font-semibold">
+              <tr>
+                <th class="px-6 py-3">Име</th>
+                <th class="px-6 py-3">Имейл</th>
+                <th class="px-6 py-3">Роля</th>
+                <th class="px-6 py-3">Статус</th>
+                <th class="px-6 py-3 text-right">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="team-table-body" class="divide-y divide-gray-200">
+              <!-- Динамично зареждане -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- МОДАЛНИ ПРОЗОРЦИ -->
+  <!-- ========================================== -->
+
+  <!-- МОДАЛ: ПОРЪЧКА (ДОБАВЯНЕ И РЕДАКЦИЯ) -->
+  <div id="order-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden flex flex-col my-8">
+      <header class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+        <h3 id="order-modal-title" class="font-bold text-lg">Добавяне на Поръчка</h3>
+        <button onclick="closeOrderModal()" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-times"></i></button>
+      </header>
+      
+      <div class="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+        <input type="hidden" id="order-id">
+        <input type="hidden" id="order-client-id">
+        
+        <!-- Автокомплийт търсене на клиент -->
+        <div class="relative">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Избор на Клиент (Въведете име или телефон)</label>
+          <input type="text" id="order-client-search" autocomplete="off" placeholder="Започнете да пишете..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <div id="autocomplete-list" class="autocomplete-items hidden"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Име на Клиент</label>
+            <input type="text" id="order-client-name" class="w-full px-3 py-2 border rounded-lg bg-gray-100" readonly>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Телефон на Клиент</label>
+            <input type="text" id="order-client-phone" class="w-full px-3 py-2 border rounded-lg bg-gray-100" readonly>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Услуга</label>
+          <select id="order-service-type" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="Преместване">🚚 Преместване (Син)</option>
+            <option value="Работа на екип">👥 Работа на екип (Зелен)</option>
+            <option value="Изхвърляне строителни">🏗️ Изхвърляне строителни (Червен)</option>
+            <option value="Изхвърляне мебели">🛋️ Изхвърляне мебели (Оранжев)</option>
+            <option value="Транспорт">🚛 Транспорт (Лилав)</option>
+            <option value="Оглед">🔎 Оглед (Тюркоаз)</option>
+            <option value="Монтаж">🔧 Монтаж (Жълт)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Описание на задачата</label>
+          <textarea id="order-desc" rows="3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Адрес на изпълнение</label>
+          <input type="text" id="order-address" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Дата</label>
+            <input type="date" id="order-date" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Начален час</label>
+            <input type="time" id="order-start-time" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Краен час</label>
+            <input type="time" id="order-end-time" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Назначаване на служители (Чекбоксове) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Назначи служители към поръчката:</label>
+          <div id="team-checkbox-list" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-3 rounded-lg bg-gray-50">
+            <!-- Динамични чекбоксове -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Статус</label>
+          <select id="order-status" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="Pending">🕒 Изчакваща (Pending)</option>
+            <option value="In Progress">⚡ В изпълнение</option>
+            <option value="Completed">✅ Завършена</option>
+          </select>
+        </div>
+      </div>
+
+      <footer class="bg-gray-100 px-6 py-4 flex justify-between gap-3">
+        <button id="btn-delete-order" onclick="deleteOrder()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition hidden"><i class="fa-solid fa-trash mr-2"></i>Изтрий</button>
+        <div class="flex gap-2 ml-auto">
+          <button onclick="closeOrderModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-semibold transition">Отказ</button>
+          <button onclick="saveOrder()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold transition">Запази</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- МОДАЛ: КЛИЕНТ -->
+  <div id="client-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+      <header class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+        <h3 id="client-modal-title" class="font-bold text-lg">Добави Клиент</h3>
+        <button onclick="closeClientModal()" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-times"></i></button>
+      </header>
+      <div class="p-6 space-y-4">
+        <input type="hidden" id="client-id">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Име на Клиента</label>
+          <input type="text" id="client-name" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
+          <input type="text" id="client-phone" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Адрес</label>
+          <input type="text" id="client-address" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Бележки / Описание</label>
+          <textarea id="client-notes" rows="3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+      </div>
+      <footer class="bg-gray-100 px-6 py-4 flex justify-end gap-3">
+        <button onclick="closeClientModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-semibold transition">Отказ</button>
+        <button onclick="saveClient()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold transition">Запази</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- МОДАЛ: СЛУЖИТЕЛ -->
+  <div id="team-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+      <header class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+        <h3 id="team-modal-title" class="font-bold text-lg">Добави Служител</h3>
+        <button onclick="closeTeamModal()" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-times"></i></button>
+      </header>
+      <div class="p-6 space-y-4">
+        <input type="hidden" id="team-id">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Име и Фамилия</label>
+          <input type="text" id="team-name" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Имейл</label>
+          <input type="email" id="team-email" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Нова Парола (Остави празна, ако няма да я сменяш)</label>
+          <input type="password" id="team-password" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Роля</label>
+            <select id="team-role" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="Employee">Служител (Employee)</option>
+              <option value="Admin">Администратор (Admin)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Статус</label>
+            <select id="team-status" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="Active">Активен</option>
+              <option value="Inactive">Неактивен</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <footer class="bg-gray-100 px-6 py-4 flex justify-end gap-3">
+        <button onclick="closeTeamModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-semibold transition">Отказ</button>
+        <button onclick="saveTeamMember()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold transition">Запази</button>
+      </footer>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- ЛОГИКА НА ПРИЛОЖЕНИЕТО (JAVASCRIPT) -->
+  <!-- ========================================== -->
+  <script>
+    let API_URL = "https://script.google.com/macros/s/AKfycbw2MuNLORc-BwpJQb6RNXQAkyaaVheXOizHlXHhZfn0dzQ5dPZq0BPOcZtPy9oZjULqeg/exec";
+    let calendar = null;
+    
+    // Глобални масиви с данни за филтриране в реално време (на терен - супер бързо)
+    let dbClients = [];
+    let dbTeam = [];
+    let dbOrders = [];
+
+    // Инициализация при стартиране
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedUrl = localStorage.getItem('erp_api_url');
+      const savedToken = localStorage.getItem('erp_token');
+      const savedRole = localStorage.getItem('erp_role');
+      const savedName = localStorage.getItem('erp_name');
+
+      if (savedUrl && savedToken && savedRole === 'Admin') {
+        API_URL = savedUrl;
+        document.getElementById('admin-name').innerText = savedName;
+        showMainInterface();
+      } else {
+        showLoginScreen();
+      }
+    });
+
+    // Извикване на бекенда
+    async function apiRequest(action, payload = {}) {
+      const token = localStorage.getItem('erp_token');
+      const body = { action, payload, token };
+      
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify(body),
+          headers: { 'Content-Type': 'text/plain' } // За заобикаляне на preflight CORS
+        });
+        const result = await response.json();
+        if (result.success === false) {
+          throw new Error(result.error);
+        }
+        return result;
+      } catch (err) {
+        alert("Грешка при комуникация: " + err.message);
+        throw err;
+      }
+    }
+
+    // Вход
+    async function attemptLogin() {
+      const setupUrl = document.getElementById('setup-api-url').value.trim();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value.trim();
+      const errorEl = document.getElementById('login-error');
+
+      errorEl.classList.add('hidden');
+
+      if (!setupUrl && !localStorage.getItem('erp_api_url')) {
+        errorEl.innerText = "Моля, въведете вашия Google Web App URL.";
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      if (setupUrl) {
+        API_URL = setupUrl;
+        localStorage.setItem('erp_api_url', setupUrl);
+      } else {
+        API_URL = localStorage.getItem('erp_api_url');
+      }
+
+      try {
+        const result = await apiRequest('login', { email, password });
+        if (result.success) {
+          if (result.role !== "Admin") {
+            alert("Този панел е достъпен само за администратори.");
+            return;
+          }
+          localStorage.setItem('erp_token', result.token);
+          localStorage.setItem('erp_role', result.role);
+          localStorage.setItem('erp_name', result.name);
+          document.getElementById('admin-name').innerText = result.name;
+          showMainInterface();
+        }
+      } catch (err) {
+        errorEl.innerText = err.message || "Грешка при вход.";
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('erp_token');
+      localStorage.removeItem('erp_role');
+      localStorage.removeItem('erp_name');
+      showLoginScreen();
+    }
+
+    function showLoginScreen() {
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('main-interface').classList.add('hidden');
+      const savedUrl = localStorage.getItem('erp_api_url');
+      if (savedUrl) {
+        document.getElementById('setup-api-url').value = savedUrl;
+      }
+    }
+
+    async function showMainInterface() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('main-interface').classList.remove('hidden');
+      
+      initCalendar();
+      await loadAllData();
+    }
+
+    // Превключване между разделите
+    function showTab(tabName) {
+      document.getElementById('tab-calendar').classList.add('hidden');
+      document.getElementById('tab-clients').classList.add('hidden');
+      document.getElementById('tab-team').classList.add('hidden');
+      
+      document.getElementById('tab-link-calendar').className = "block py-2.5 px-4 rounded transition text-gray-300 hover:bg-slate-700 hover:text-white";
+      document.getElementById('tab-link-clients').className = "block py-2.5 px-4 rounded transition text-gray-300 hover:bg-slate-700 hover:text-white";
+      document.getElementById('tab-link-team').className = "block py-2.5 px-4 rounded transition text-gray-300 hover:bg-slate-700 hover:text-white";
+
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      document.getElementById(`tab-link-${tabName}`).className = "block py-2.5 px-4 rounded transition bg-slate-700 text-white font-bold";
+
+      if (tabName === 'calendar' && calendar) {
+        calendar.render();
+      }
+    }
+
+    // Зареждане на всички данни в паметта за бързо търсене без трафик
+    async function loadAllData() {
+      try {
+        const clientsRes = await apiRequest('getClients');
+        dbClients = clientsRes.data;
+        renderClientsTable();
+        initAutocomplete();
+
+        const teamRes = await apiRequest('getTeam');
+        dbTeam = teamRes.data;
+        renderTeamTable();
+        renderTeamCheckboxes();
+
+        const ordersRes = await apiRequest('getOrders');
+        dbOrders = ordersRes.data;
+        renderCalendarEvents();
+      } catch (err) {
+        console.error("Грешка при зареждане на синхронизация: " + err);
+      }
+    }
+
+    // ==========================================
+    // ЛОГИКА: КЛИЕНТИ
+    // ==========================================
+    function renderClientsTable() {
+      const search = document.getElementById('client-search').value.toLowerCase().trim();
+      const body = document.getElementById('clients-table-body');
+      body.innerHTML = "";
+
+      const filtered = dbClients.filter(c => 
+        c.name.toLowerCase().includes(search) || 
+        c.phone.includes(search)
+      );
+
+      filtered.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-50 border-b";
+        tr.innerHTML = `
+          <td class="px-6 py-4 font-semibold text-gray-900">${c.name}</td>
+          <td class="px-6 py-4 text-gray-600">${c.phone}</td>
+          <td class="px-6 py-4 text-gray-600">${c.address}</td>
+          <td class="px-6 py-4 text-xs text-gray-500">${c.notes || '-'}</td>
+          <td class="px-6 py-4 text-right">
+            <button onclick='editClient(${JSON.stringify(c)})' class="text-indigo-600 hover:text-indigo-900 font-medium mr-3"><i class="fa-solid fa-edit"></i> Редакция</button>
+            <button onclick="deleteClient('${c.id}')" class="text-red-600 hover:text-red-900 font-medium"><i class="fa-solid fa-trash"></i></button>
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function openClientModal() {
+      document.getElementById('client-id').value = "";
+      document.getElementById('client-name').value = "";
+      document.getElementById('client-phone').value = "";
+      document.getElementById('client-address').value = "";
+      document.getElementById('client-notes').value = "";
+      document.getElementById('client-modal-title').innerText = "Добави Нов Клиент";
+      document.getElementById('client-modal').classList.remove('hidden');
+    }
+
+    function editClient(client) {
+      document.getElementById('client-id').value = client.id;
+      document.getElementById('client-name').value = client.name;
+      document.getElementById('client-phone').value = client.phone;
+      document.getElementById('client-address').value = client.address;
+      document.getElementById('client-notes').value = client.notes;
+      document.getElementById('client-modal-title').innerText = "Редакция на Клиент";
+      document.getElementById('client-modal').classList.remove('hidden');
+    }
+
+    function closeClientModal() {
+      document.getElementById('client-modal').classList.add('hidden');
+    }
+
+    async function saveClient() {
+      const id = document.getElementById('client-id').value;
+      const name = document.getElementById('client-name').value.trim();
+      const phone = document.getElementById('client-phone').value.trim();
+      const address = document.getElementById('client-address').value.trim();
+      const notes = document.getElementById('client-notes').value.trim();
+
+      if (!name || !phone) {
+        alert("Името и телефонът са задължителни!");
+        return;
+      }
+
+      await apiRequest('saveClient', { id, name, phone, address, notes });
+      closeClientModal();
+      await loadAllData();
+    }
+
+    async function deleteClient(id) {
+      if (!confirm("Сигурни ли сте, че искате да изтриете този клиент?")) return;
+      await apiRequest('deleteClient', { id });
+      await loadAllData();
+    }
+
+
+    // ==========================================
+    // ЛОГИКА: ЕКИП
+    // ==========================================
+    function renderTeamTable() {
+      const search = document.getElementById('team-search').value.toLowerCase().trim();
+      const body = document.getElementById('team-table-body');
+      body.innerHTML = "";
+
+      const filtered = dbTeam.filter(t => 
+        t.name.toLowerCase().includes(search) || 
+        t.email.toLowerCase().includes(search)
+      );
+
+      filtered.forEach(t => {
+        const isAct = t.status === 'Active';
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-50 border-b";
+        tr.innerHTML = `
+          <td class="px-6 py-4 font-semibold text-gray-900">${t.name}</td>
+          <td class="px-6 py-4 text-gray-600">${t.email}</td>
+          <td class="px-6 py-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${t.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">${t.role}</span></td>
+          <td class="px-6 py-4"><span class="px-2 py-0.5 rounded text-xs font-bold ${isAct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isAct ? 'Активен' : 'Неактивен'}</span></td>
+          <td class="px-6 py-4 text-right">
+            <button onclick='editTeam(${JSON.stringify(t)})' class="text-indigo-600 hover:text-indigo-900 font-medium"><i class="fa-solid fa-edit"></i> Настройка</button>
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function openTeamModal() {
+      document.getElementById('team-id').value = "";
+      document.getElementById('team-name').value = "";
+      document.getElementById('team-email').value = "";
+      document.getElementById('team-password').value = "";
+      document.getElementById('team-role').value = "Employee";
+      document.getElementById('team-status').value = "Active";
+      document.getElementById('team-modal-title').innerText = "Нов Служител";
+      document.getElementById('team-modal').classList.remove('hidden');
+    }
+
+    function editTeam(member) {
+      document.getElementById('team-id').value = member.id;
+      document.getElementById('team-name').value = member.name;
+      document.getElementById('team-email').value = member.email;
+      document.getElementById('team-password').value = ""; // за промяна по избор
+      document.getElementById('team-role').value = member.role;
+      document.getElementById('team-status').value = member.status;
+      document.getElementById('team-modal-title').innerText = "Настройка на Профил";
+      document.getElementById('team-modal').classList.remove('hidden');
+    }
+
+    function closeTeamModal() {
+      document.getElementById('team-modal').classList.add('hidden');
+    }
+
+    async function saveTeamMember() {
+      const id = document.getElementById('team-id').value;
+      const name = document.getElementById('team-name').value.trim();
+      const email = document.getElementById('team-email').value.trim();
+      const password = document.getElementById('team-password').value;
+      const role = document.getElementById('team-role').value;
+      const status = document.getElementById('team-status').value;
+
+      if (!name || !email) {
+        alert("Име и имейл са задължителни!");
+        return;
+      }
+      if (!id && !password) {
+        alert("Паролата е задължителна за нов служител!");
+        return;
+      }
+
+      await apiRequest('saveTeamMember', { id, name, email, password, role, status });
+      closeTeamModal();
+      await loadAllData();
+    }
+
+
+    // ==========================================
+    // ЛОГИКА: ПОРЪЧКИ И АВТОКОМПЛИЙТ
+    // ==========================================
+    function initAutocomplete() {
+      const input = document.getElementById('order-client-search');
+      const list = document.getElementById('autocomplete-list');
+
+      input.addEventListener('input', function() {
+        const val = this.value.toLowerCase().trim();
+        list.innerHTML = "";
+        if (!val) {
+          list.classList.add('hidden');
+          return;
+        }
+
+        const matches = dbClients.filter(c => 
+          c.name.toLowerCase().includes(val) || 
+          c.phone.includes(val)
+        );
+
+        if (matches.length === 0) {
+          list.classList.add('hidden');
+          return;
+        }
+
+        matches.forEach(m => {
+          const div = document.createElement('div');
+          div.innerHTML = `<strong>${m.name}</strong> - 📱 ${m.phone}`;
+          div.addEventListener('click', () => {
+            document.getElementById('order-client-id').value = m.id;
+            document.getElementById('order-client-name').value = m.name;
+            document.getElementById('order-client-phone').value = m.phone;
+            document.getElementById('order-address').value = m.address;
+            input.value = m.name;
+            list.classList.add('hidden');
+          });
+          list.appendChild(div);
+        });
+        list.classList.remove('hidden');
+      });
+
+      // Затваряне при клик извън него
+      document.addEventListener('click', (e) => {
+        if (e.target !== input) list.classList.add('hidden');
+      });
+    }
+
+    function renderTeamCheckboxes() {
+      const container = document.getElementById('team-checkbox-list');
+      container.innerHTML = "";
+      
+      // Показваме само активни служители за назначаване
+      const activeTeam = dbTeam.filter(t => t.status === "Active");
+      
+      activeTeam.forEach(t => {
+        const label = document.createElement('label');
+        label.className = "flex items-center gap-2 p-2 bg-white border rounded hover:bg-gray-100 cursor-pointer text-sm font-medium";
+        label.innerHTML = `
+          <input type="checkbox" name="assigned-employees" value="${t.id}" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+          <span>${t.name}</span>
+        `;
+        container.appendChild(label);
+      });
+    }
+
+    function initCalendar() {
+      const calendarEl = document.getElementById('calendar');
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'bg',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        buttonText: {
+          today: 'Днес',
+          month: 'Месец',
+          week: 'Седмица',
+          day: 'Ден'
+        },
+        firstDay: 1, // Понеделник
+        eventClick: function(info) {
+          const order = dbOrders.find(o => o.id == info.event.id);
+          if (order) editOrder(order);
+        },
+        dateClick: function(info) {
+          openOrderModal(info.dateStr);
+        }
+      });
+      calendar.render();
+    }
+
+    function renderCalendarEvents() {
+      if (!calendar) return;
+      calendar.removeAllEvents();
+
+      const search = document.getElementById('order-search').value.toLowerCase().trim();
+      
+      // Филтрираме събитията по име или телефон
+      const filtered = dbOrders.filter(o => 
+        !search || 
+        o.client_name.toLowerCase().includes(search) || 
+        o.client_phone.includes(search)
+      );
+
+      filtered.forEach(o => {
+        // Форматиране на дата и време за FullCalendar
+        const startStr = `${o.date}T${o.start_time || '09:00'}:00`;
+        const endStr = `${o.date}T${o.end_time || '10:00'}:00`;
+
+        calendar.addEvent({
+          id: o.id,
+          title: `[${o.service_type}] ${o.client_name}`,
+          start: startStr,
+          end: endStr,
+          backgroundColor: o.color || '#3788d8',
+          borderColor: o.color || '#3788d8'
+        });
+      });
+    }
+
+    function filterCalendarEvents() {
+      renderCalendarEvents();
+    }
+
+    function openOrderModal(selectedDate = "") {
+      document.getElementById('order-id').value = "";
+      document.getElementById('order-client-id').value = "";
+      document.getElementById('order-client-search').value = "";
+      document.getElementById('order-client-name').value = "";
+      document.getElementById('order-client-phone').value = "";
+      document.getElementById('order-service-type').value = "Преместване";
+      document.getElementById('order-desc').value = "";
+      document.getElementById('order-address').value = "";
+      document.getElementById('order-start-time').value = "09:00";
+      document.getElementById('order-end-time').value = "10:00";
+      document.getElementById('order-status').value = "Pending";
+      
+      // Премахване на отметките на всички служители
+      const checkboxes = document.querySelectorAll('input[name="assigned-employees"]');
+      checkboxes.forEach(cb => cb.checked = false);
+
+      // Задаване на дата
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('order-date').value = selectedDate || today;
+
+      document.getElementById('order-modal-title').innerText = "Създаване на Поръчка";
+      document.getElementById('btn-delete-order').classList.add('hidden');
+      document.getElementById('order-modal').classList.remove('hidden');
+    }
+
+    function editOrder(order) {
+      document.getElementById('order-id').value = order.id;
+      document.getElementById('order-client-id').value = order.client_id;
+      document.getElementById('order-client-search').value = order.client_name;
+      document.getElementById('order-client-name').value = order.client_name;
+      document.getElementById('order-client-phone').value = order.client_phone;
+      document.getElementById('order-service-type').value = order.service_type;
+      document.getElementById('order-desc').value = order.description;
+      document.getElementById('order-address').value = order.address;
+      document.getElementById('order-date').value = order.date.split('T')[0];
+      document.getElementById('order-start-time').value = order.start_time;
+      document.getElementById('order-end-time').value = order.end_time;
+      document.getElementById('order-status').value = order.status;
+
+      // Маркиране на назначените служители в чекбоксовете
+      const checkboxes = document.querySelectorAll('input[name="assigned-employees"]');
+      checkboxes.forEach(cb => {
+        cb.checked = order.assigned_ids.includes(cb.value.toString());
+      });
+
+      document.getElementById('order-modal-title').innerText = "Детайли / Редакция на поръчка";
+      document.getElementById('btn-delete-order').classList.remove('hidden');
+      document.getElementById('order-modal').classList.remove('hidden');
+    }
+
+    function closeOrderModal() {
+      document.getElementById('order-modal').classList.add('hidden');
+    }
+
+    async function saveOrder() {
+      const id = document.getElementById('order-id').value;
+      const client_id = document.getElementById('order-client-id').value;
+      const client_name = document.getElementById('order-client-name').value;
+      const client_phone = document.getElementById('order-client-phone').value;
+      const service_type = document.getElementById('order-service-type').value;
+      const description = document.getElementById('order-desc').value.trim();
+      const address = document.getElementById('order-address').value.trim();
+      const date = document.getElementById('order-date').value;
+      const start_time = document.getElementById('order-start-time').value;
+      const end_time = document.getElementById('order-end-time').value;
+      const status = document.getElementById('order-status').value;
+
+      if (!client_id) {
+        alert("Моля, изберете валиден клиент от списъка с автокомплийт!");
+        return;
+      }
+      if (!date || !start_time || !end_time) {
+        alert("Моля, попълнете дата и часове!");
+        return;
+      }
+
+      // Изтегляне на избраните служители от чекбоксовете
+      const checkedBoxes = document.querySelectorAll('input[name="assigned-employees"]:checked');
+      const assigned_ids = Array.from(checkedBoxes).map(cb => cb.value);
+
+      await apiRequest('saveOrder', {
+        id, client_id, client_name, client_phone, service_type, description, address, date, start_time, end_time, assigned_ids, status
+      });
+
+      closeOrderModal();
+      await loadAllData();
+    }
+
+    async function deleteOrder() {
+      const id = document.getElementById('order-id').value;
+      if (!id) return;
+      if (!confirm("Сигурни ли сте, че искате да изтриете тази поръчка?")) return;
+
+      await apiRequest('deleteOrder', { id });
+      closeOrderModal();
+      await loadAllData();
+    }
+  </script>
+</body>
+</html>
